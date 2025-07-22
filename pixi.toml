@@ -1,0 +1,22 @@
+[workspace]
+name = "meshy_open_data"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = "3.12.*"
+uv = "*"
+
+[system-requirements]
+libc = { family = "glibc", version = "2.34" }
+
+[pypi-dependencies]
+pyarrow = {}
+databricks-sql-connector = { version = ">=4.0" }
+databricks-sdk = { version = ">=0.52" }
+pandas = {}
+polars = {}
+sentencepiece = {}
+scikit-image = {}
+aiofiles = {}
+aiobotocore = { extras = ["boto3"] }
