@@ -17,9 +17,15 @@ A comprehensive Python package for data operations with Databricks and S3, desig
 
 ## Installation
 
+[Pixi](https://pixi.sh) is a modern package management tool that provides reproducible environments. Install pixi first:
+
 ```bash
-# Install required dependencies
-pip install pandas polars boto3 aiobotocore aiofiles databricks-sql-connector databricks-sdk
+# Install pixi
+curl -fsSL https://pixi.sh/install.sh | bash
+
+# Then install dependencies and activate environment
+pixi install
+pixi shell
 ```
 
 ## Setup
