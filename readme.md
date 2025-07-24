@@ -7,15 +7,12 @@ A comprehensive Python package for data operations with Databricks and S3, desig
 ### 🏗️ Databricks Integration (`DatabricksHelper`)
 - **SQL Operations**: Execute queries against Databricks SQL warehouses with pandas/polars support
 - **Workspace Management**: Create, modify, and delete notebooks, jobs, and workspace assets
-- **Authentication Support**: Both Personal Access Token (PAT) and OAuth service principal authentication
-- **Spark Context**: Access to distributed computing capabilities
+- **Authentication Support**: Personal Access Token (PAT) authentication
 - **File Operations**: Seamless file management between local filesystem and Databricks workspace/DBFS
-- **Auto-ingestion Jobs**: Automated data pipeline creation for S3 to Databricks workflows
 
 ### ☁️ S3 Storage (`S3IO`)
-- **Multi-backend Support**: AWS S3 and Ceph RGW (Rados Gateway) compatibility
+- **AWS S3 Integration**: Seamless AWS S3 operations
 - **Async Operations**: High-performance asynchronous file operations
-- **Local Caching**: Optional local file caching for improved performance
 - **Batch Operations**: Efficient bulk upload/download capabilities
 
 ## Installation
@@ -23,27 +20,19 @@ A comprehensive Python package for data operations with Databricks and S3, desig
 ```bash
 # Install required dependencies
 pip install pandas polars boto3 aiobotocore aiofiles databricks-sql-connector databricks-sdk
-
-# For Spark operations (optional)
-pip install databricks-connect
 ```
 
-## Configuration
+## Setup
 
 ### Environment Variables
 
 ```bash
 # Databricks Configuration
 export DATABRICKS_HOST="your-databricks-workspace-url"
-export DATABRICKS_TOKEN="your-personal-access-token"  # For PAT auth
+export DATABRICKS_TOKEN="your-personal-access-token"
 export DATABRICKS_WAREHOUSE_ID="your-warehouse-http-path"
-export DATABRICKS_CLUSTER_ID="your-cluster-id"  # or "serverless"
 export DATABRICKS_CATALOG="your_catalog_name"
 export DATABRICKS_SCHEMA="your_schema_name"
-
-# For OAuth authentication (alternative to PAT)
-export DATABRICKS_CLIENT_ID="your-oauth-client-id"
-export DATABRICKS_CLIENT_SECRET="your-oauth-client-secret"
 
 # MLflow (optional)
 export MLFLOW_TRACKING_URI="databricks"
@@ -77,58 +66,41 @@ export AWS_SECRET_ACCESS_KEY="your-aws-secret-key"
 4. Go to "Connection details" tab
 5. Copy the "HTTP Path" value (e.g., `/sql/1.0/warehouses/abc123def456`)
 
-**DATABRICKS_CLUSTER_ID**
-1. Go to "Compute" in the Databricks sidebar
-2. Select or create a cluster
-3. Click on the cluster name
-4. Copy the cluster ID from the URL or cluster details
-5. Use `"serverless"` for serverless compute
-
 **DATABRICKS_CATALOG** and **DATABRICKS_SCHEMA**
 - These are your Unity Catalog database identifiers
 - Check with your Databricks administrator for the correct values
 - Common defaults: catalog=`main`, schema=`default`
 
-**OAuth Credentials** (for service principals)
-1. In Databricks workspace, go to "Settings" → "Identity and access"
-2. Click "Service principals" → "Add service principal"
-3. Create the service principal and note the Application ID (client_id)
-4. Generate a secret for the service principal (client_secret)
-5. Assign necessary permissions to the service principal
+### Authentication Methods
 
-#### ☁️ AWS S3 Configuration
+#### 🏗️ Databricks Authentication
 
-**AWS_ACCESS_KEY_ID** and **AWS_SECRET_ACCESS_KEY**
-1. **IAM User Approach** (recommended for development):
-   - Go to AWS IAM console
-   - Create a new user or use existing one
-   - Attach S3 permissions policy (e.g., `AmazonS3FullAccess`)
-   - Go to "Security credentials" tab
-   - Create access key → Choose "Application running outside AWS"
-   - Download or copy the Access Key ID and Secret Access Key
+Use Personal Access Token (PAT) authentication:
 
-2. **IAM Role Approach** (recommended for production):
-   - Create an IAM role with S3 permissions
-   - Attach the role to your EC2 instance/ECS task/Lambda function
-   - No need to set these environment variables when using IAM roles
+```python
+# Set environment variable
+export DATABRICKS_TOKEN="your-personal-access-token"
 
-**LOCAL_CACHE_DIR** (optional)
-- Any local directory path for caching S3 files
-- Example: `/tmp/s3_cache` or `./cache`
-- Directory will be created automatically if it doesn't exist
+# Or pass in configuration
+config = DatabricksConfig.from_env()
+config.token = "your-personal-access-token"
+dbh = DatabricksHelper(config=config)
+```
 
-**RGW_HOSTS** (optional, for Ceph RGW)
-- Contact your system administrator for RGW endpoint URLs
-- Format: comma-separated HTTP URLs (e.g., `http://10.0.1.1:7480,http://10.0.1.2:7480`)
+#### ☁️ S3 Authentication
 
-#### 🔒 Security Best Practices
+Set your AWS credentials as environment variables:
+
+```python
+export AWS_ACCESS_KEY_ID="your-access-key"
+export AWS_SECRET_ACCESS_KEY="your-secret-key"
+```
+
+### 🔒 Security Best Practices
 
 1. **Never commit credentials to version control**
 2. **Use environment variables or secure secret management**
 3. **Rotate tokens and keys regularly**
-4. **Use IAM roles instead of access keys when possible**
-5. **Limit permissions to minimum required scope**
-6. **Consider using tools like AWS Secrets Manager or HashiCorp Vault**
 
 ## Usage Examples
 
@@ -214,8 +186,7 @@ job_response = ws_client.jobs.create(
         "task_key": "main_task",
         "notebook_task": {
             "notebook_path": "/path/to/notebook",
-        },
-        "existing_cluster_id": "your-cluster-id"
+        }
     }]
 )
 
@@ -244,39 +215,7 @@ with DatabricksHelper() as dbh:
     )
 ```
 
-#### Spark Operations
 
-```python
-with DatabricksHelper() as dbh:
-    # Get Spark session for custom operations
-    spark = dbh.get_spark()
-    
-    # Read data using Spark
-    df = spark.read.parquet("dbfs:/mnt/data/large_dataset")
-    
-    # Perform Spark transformations
-    result = df.filter(df.status == "active").groupBy("category").count()
-    
-    # Convert to Pandas for further processing
-    pandas_df = result.toPandas()
-```
-
-#### Auto-ingestion Jobs
-
-```python
-# Create automated S3 to Databricks ingestion job
-with DatabricksHelper() as dbh:
-    job_response = dbh.create_auto_ingestion_job(
-        run_id="unique_run_id",
-        s3_folder="s3://your-bucket/data/",
-        table="ingested_data",
-        file_format="json",
-        interval="5 minutes"  # Optional: for scheduled ingestion
-    )
-    
-    # Later, remove the job when no longer needed
-    dbh.remove_auto_ingestion_job(job_response.job_id)
-```
 
 ### ☁️ S3 Operations
 
@@ -362,74 +301,22 @@ async def process_files():
 asyncio.run(process_files())
 ```
 
-#### Local Caching
 
-```python
-# Enable local file caching for better performance
-s3_cached = get_s3io(local_cache_dir="/tmp/s3_cache")
 
-# Files will be cached locally on first access
-with s3_cached.getFileCached("large_model.pkl") as file_obj:
-    import pickle
-    model = pickle.load(file_obj)
-    
-# Subsequent access will use local cache
-with s3_cached.getFileCached("large_model.pkl") as file_obj:
-    model = pickle.load(file_obj)  # Loads from local cache
-```
 
-## Authentication Methods
-
-### Databricks Authentication
-
-#### 1. Personal Access Token (PAT)
-```python
-# Set environment variable
-export DATABRICKS_TOKEN="dapi1234567890abcdef"
-
-# Or pass in configuration
-config = DatabricksConfig.from_env()
-config.token = "dapi1234567890abcdef"
-dbh = DatabricksHelper(config=config)
-```
-
-#### 2. OAuth Service Principal (for automated systems)
-```python
-# Set environment variables
-export DATABRICKS_CLIENT_ID="your-client-id"
-export DATABRICKS_CLIENT_SECRET="your-client-secret"
-
-# Configuration will automatically use OAuth
-dbh = DatabricksHelper()
-```
-
-**Important**: Do not specify both token and OAuth credentials simultaneously.
-
-### S3 Authentication
-
-The package uses AWS IAM roles by default. For explicit credentials:
-
-```python
-# Set environment variables
-export AWS_ACCESS_KEY_ID="your-access-key"
-export AWS_SECRET_ACCESS_KEY="your-secret-key"
-```
 
 ## Best Practices
 
 ### 🏗️ Databricks
 - Use **context managers** (`with` statement) to ensure proper resource cleanup
 - For quick queries, prefer **SQL warehouses** over clusters
-- For long-running operations, use **dedicated clusters** instead of serverless
 - Set appropriate **timeouts** based on workload requirements
-- Use **Spark context** only when necessary to optimize resource usage
 - Leverage **batch processing** for large datasets to avoid memory issues
 
 ### ☁️ S3
-- Enable **local caching** for frequently accessed files
 - Use **async operations** for better performance with multiple files
 - Implement proper **error handling** for network operations
-- Consider **RGW caching** for high-throughput scenarios
+- Use **batch operations** for uploading multiple files efficiently
 
 ## Error Handling
 
@@ -447,26 +334,3 @@ except Exception as e:
     print(f"Download failed: {e}")
 ```
 
-## Utility Functions
-
-```python
-# Convert iterables to SQL IN clause format
-from meshy_open_data.helper.dbs import DatabricksHelper
-
-user_ids = [1, 2, 3, 4, 5]
-sql_set = DatabricksHelper.iterable_to_sql_set(user_ids)
-query = f"SELECT * FROM users WHERE user_id IN {sql_set}"
-```
-
-## Contributing
-
-When extending this package:
-1. Follow the existing patterns for error handling and logging
-2. Add comprehensive docstrings with usage examples
-3. Implement proper resource cleanup in context managers
-4. Add type hints for better IDE support
-5. Consider both sync and async patterns where appropriate
-
-## License
-
-This project is licensed under the terms specified in the LICENSE file.
